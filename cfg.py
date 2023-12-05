@@ -9,11 +9,11 @@ APP_VERSION = "version 0.1"
 CFN_STACK_DESCRIPTION = "MirthConnect on AWS (" + APP_VERSION + ")"
 CFN_JDBC_CHANNEL_STACK_DESCRIPTION = "This stack deploys JDBC to S3 (CSV) channel on Mirth with sample patient data in RDS able"
 
-DEPLOY_REGION="us-east-1"
+DEPLOY_REGION="us-west-2"
 
 # VPC options
 VPC_CIDR = "10.23.0.0/16" # cidr for the vpc that will be provisioned.
-PUBLIC_LOAD_BALANCER = False # If this is set to True, the NLB will have a public Internet IP address
+PUBLIC_LOAD_BALANCER = True # If this is set to True, the NLB will have a public Internet IP address
 
 NAME_PREFIX = "mirth"
 
@@ -30,7 +30,8 @@ TASK_ENABLE_EXEC_COMMAND=False
 # DATABASE CONFIG
 DEFAULT_DATABASE_NAME="mirthdb"
 DEFAULT_DATABASE_ADMIN_USER="mirthdbadmin"
-RDS_INSTANCE_TYPE="r6g.large"
+# RDS_INSTANCE_TYPE="r6g.large"
+RDS_INSTANCE_TYPE="t4g.medium"
 
 # mirthconnect options
 MIRTH_REPOSITORY="nextgenhealthcare/connect"
