@@ -73,8 +73,7 @@ class MirthConnectStack(Stack):
             engine=rds.DatabaseInstanceEngine.postgres(
                 version=rds.PostgresEngineVersion.VER_15_3
             ),
-            # Optional: Adjust the instance type as needed for your use case
-            instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO),
+            instance_type=ec2.InstanceType(cfg.RDS_INSTANCE_TYPE),
             credentials=rds.Credentials.from_generated_secret(cfg.DEFAULT_DATABASE_ADMIN_USER),  # Defaults to 'admin' username and generated password
             database_name=cfg.DEFAULT_DATABASE_NAME,
             removal_policy=RemovalPolicy.SNAPSHOT,  
