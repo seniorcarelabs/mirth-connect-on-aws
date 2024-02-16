@@ -1,6 +1,9 @@
 # Use nextgenhealthcare/connect as the base image
 FROM nextgenhealthcare/connect:latest
 
+# Temporarily switch to root to change file permissions
+USER root
+
 # Copy the jose4j library version 0.9.5 to the specified directory in the container
 COPY lib/jose4j-0.9.5.jar /opt/mirthconnect/appdata/jars/
 
@@ -8,8 +11,3 @@ COPY lib/jose4j-0.9.5.jar /opt/mirthconnect/appdata/jars/
 RUN chown mirth:mirth /opt/mirthconnect/appdata/jars/jose4j-0.9.5.jar && \
     chmod 644 /opt/mirthconnect/appdata/jars/jose4j-0.9.5.jar
 
-# If Mirth Connect does not automatically recognize the JAR, you might need to add it to the classpath
-# Uncomment the line below and adjust as necessary
-# ENV CLASSPATH=$CLASSPATH:/opt/mirthconnect/appdata/jars/jose4j-0.9.5.jar
-
-# Other customizations or configurations can go here
