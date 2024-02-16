@@ -19,7 +19,7 @@ NAME_PREFIX = "mirth"
 
 # Fargate task defintion parameters
 # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html
-REGISTRY_IMAGE = "nextgenhealthcare/connect:latest"
+REGISTRY_IMAGE = "oalhaitatomic/nextgenhealthcare-connect:latest"
 TASK_CPU=2048
 TASK_MEMORY_MIB=4096
 TASK_COUNT=1
@@ -34,7 +34,7 @@ DEFAULT_DATABASE_ADMIN_USER="mirthdbadmin"
 RDS_INSTANCE_TYPE="t4g.medium"
 
 # mirthconnect options
-MIRTH_REPOSITORY="nextgenhealthcare/connect"
+MIRTH_REPOSITORY="oalhaitatomic/nextgenhealthcare-connect"
 MIRTH_ADMIN_PORT=8443
 DATABASE_PORT=5432
 
