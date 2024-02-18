@@ -90,6 +90,26 @@ class MirthConnectStack(Stack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
             vpc=vpc,
         )
+
+        # New Database for storing data received by Mirth
+        data_db = rds.DatabaseInstance(
+            self, "DataDatabase",
+            engine=rds.DatabaseInstanceEngine.postgres(version=rds.PostgresEngineVersion.VER_13_4),  # Choose the version as per your requirement
+            instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO),  # Adjust based on your needs
+            vpc=vpc,
+            credentials=rds.Credentials.from_generated_secret("dataUser"),  # Username for the database, a secret for the password will be automatically created
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
+            multi_az=False,  # Set to True if you want high availability
+            allocated_storage=20,  # Minimum is 20 GiB for PostgreSQL
+            max_allocated_storage=100,  # Enables storage autoscaling up to 100 GiB
+            deletion_protection=False,  # True is recommended for production environments
+            removal_policy=RemovalPolicy.SNAPSHOT,  # Adjust based on your data persistence requirements
+        )
+
+        # Print the new DB connection details
+        CfnOutput(self, "DataDBInstanceEndpoint", value=data_db.db_instance_endpoint_address)
+        CfnOutput(self, "DataDBInstanceSecretARN", value=data_db.secret.secret_arn)
+
   
         # print the db cluster identifier
         CfnOutput(self, "DB Cluster", value=dbcluster.cluster_identifier)
@@ -123,7 +143,8 @@ class MirthConnectStack(Stack):
             container_name="mirthconnect",
             container_ports=container_ports,
             secrets={
-                "DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(dbcluster.secret, field="password")
+                "DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(dbcluster.secret, field="password"),
+                "DATA_DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(data_db.secret, field="password")
             },
             environment={
                 "MIRTH_ADMIN_PORT": str(cfg.MIRTH_ADMIN_PORT),
@@ -132,7 +153,9 @@ class MirthConnectStack(Stack):
                 "DATABASE_USERNAME": str(cfg.DEFAULT_DATABASE_ADMIN_USER),
                 #"DATABASE_PASSWORD": str(dbcluster.secret.secret_value_from_json('password').unsafe_unwrap()),
                 "DATABASE_MAX_RETRY": str(2),
-                "DATABASE_RETRY_WAIT": str(10000)
+                "DATABASE_RETRY_WAIT": str(10000),
+                "DATA_DATABASE_URL": f"jdbc:postgresql://{data_db.db_instance_endpoint_address}:{data_db.db_instance_endpoint_port}/postgres",
+                "DATA_DATABASE_USERNAME": "dataUser"
             }
         )
         
@@ -168,6 +191,9 @@ class MirthConnectStack(Stack):
             ],
             target_groups=target_groups
         )
+
+        # Allow the Fargate service to connect to the new database
+        data_db.connections.allow_from(fargate_service.service, ec2.Port.tcp(5432), "Allow Fargate service to access data database")
   
         CfnOutput(self, "TaskExecRoleARN", value=fargate_service.task_definition.task_role.role_arn)
 
