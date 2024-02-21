@@ -68,34 +68,25 @@ class MirthConnectStack(Stack):
         # print the arn for this VPC
         CfnOutput(self, "VPC", value=vpc.vpc_arn)
 
-        dbcluster = rds.DatabaseCluster(
-            self, "mirth-database",
-            # engine=rds.DatabaseClusterEngine.aurora_mysql(version=rds.AuroraMysqlEngineVersion.VER_2_10_2),
-            engine=rds.DatabaseClusterEngine.aurora_postgres(version=rds.AuroraPostgresEngineVersion.VER_15_3),
-            credentials=rds.Credentials.from_generated_secret(cfg.DEFAULT_DATABASE_ADMIN_USER),  # Optional - will default to 'admin' username and generated password
-            default_database_name=cfg.DEFAULT_DATABASE_NAME,
-            removal_policy=RemovalPolicy.SNAPSHOT,
+        db_instance = rds.DatabaseInstance(
+            self, "mirth-database-instance",
+            engine=rds.DatabaseInstanceEngine.postgres(
+                version=rds.PostgresEngineVersion.VER_15_3
+            ),
+            instance_type=ec2.InstanceType(cfg.RDS_INSTANCE_TYPE),
+            credentials=rds.Credentials.from_generated_secret(cfg.DEFAULT_DATABASE_ADMIN_USER),  # Defaults to 'admin' username and generated password
+            database_name=cfg.DEFAULT_DATABASE_NAME,
+            removal_policy=RemovalPolicy.SNAPSHOT,  
             storage_encrypted=True,
-            instance_update_behaviour=rds.InstanceUpdateBehaviour.ROLLING, # Optional - defaults to rds.InstanceUpdateBehaviour.BULK
-            writer=rds.ClusterInstance.provisioned(
-                "Instance1", 
-                instance_type=ec2.InstanceType(cfg.RDS_INSTANCE_TYPE),
-                #is_from_legacy_instance_props=True
-                ),
-            readers=[rds.ClusterInstance.provisioned(
-                "Instance2", 
-                instance_type=ec2.InstanceType(cfg.RDS_INSTANCE_TYPE),
-                #is_from_legacy_instance_props=True
-                )],
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED),
             vpc=vpc,
         )
   
         # print the db cluster identifier
-        CfnOutput(self, "DB Cluster", value=dbcluster.cluster_identifier)
-        CfnOutput(self, "DB Writer Endpoint", value=dbcluster.cluster_endpoint.hostname)
-        CfnOutput(self, "DB Reader Endpoint", value=dbcluster.cluster_read_endpoint.hostname)
-        CfnOutput(self, "DB Password Secret ARN", value=dbcluster.secret.secret_arn)
+        # CfnOutput(self, "DB Cluster", value=dbcluster.cluster_identifier)
+        # CfnOutput(self, "DB Writer Endpoint", value=dbcluster.cluster_endpoint.hostname)
+        # CfnOutput(self, "DB Reader Endpoint", value=dbcluster.cluster_read_endpoint.hostname)
+        CfnOutput(self, "DB Password Secret ARN", value=db_instance.secret.secret_arn)
         
         # create ECS cluster
         cluster = ecs.Cluster(
@@ -118,23 +109,24 @@ class MirthConnectStack(Stack):
 
         # Fargate Task Properties
         # https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_ecs/ContainerImage.html
-        task_image_props=ecs_patterns.NetworkLoadBalancedTaskImageProps(
+        task_image_props = ecs_patterns.NetworkLoadBalancedTaskImageProps(
             image=ecs.ContainerImage.from_registry(cfg.REGISTRY_IMAGE),
             container_name="mirthconnect",
             container_ports=container_ports,
             secrets={
-                "DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(dbcluster.secret, field="password")
+                "DATABASE_PASSWORD": ecs.Secret.from_secrets_manager(db_instance.secret, field="password")
             },
             environment={
                 "MIRTH_ADMIN_PORT": str(cfg.MIRTH_ADMIN_PORT),
-                "DATABASE": str('postgres'),
-                "DATABASE_URL": str(f'jdbc:postgresql://{dbcluster.cluster_endpoint.hostname}:{dbcluster.cluster_endpoint.port}/{cfg.DEFAULT_DATABASE_NAME}'),
-                "DATABASE_USERNAME": str(cfg.DEFAULT_DATABASE_ADMIN_USER),
-                #"DATABASE_PASSWORD": str(dbcluster.secret.secret_value_from_json('password').unsafe_unwrap()),
+                "DATABASE": 'postgres',
+                # Use the instance endpoint's address and port for the DATABASE_URL
+                "DATABASE_URL": f'jdbc:postgresql://{db_instance.instance_endpoint.hostname}:{db_instance.instance_endpoint.port}/{cfg.DEFAULT_DATABASE_NAME}',
+                "DATABASE_USERNAME": cfg.DEFAULT_DATABASE_ADMIN_USER,
                 "DATABASE_MAX_RETRY": str(2),
-                "DATABASE_RETRY_WAIT": str(10000)
+                "DATABASE_RETRY_WAIT": str(10000) 
             }
         )
+
         
         # S3 bucket for Logging
         log_bucket = s3.Bucket(
@@ -211,4 +203,8 @@ class MirthConnectStack(Stack):
                 )
         
         self.fargate_service = fargate_service #adding to the main scope as we need to send cluster params to other stacks in the app
-        dbcluster.connections.allow_default_port_from(fargate_service.service.connections)
+        db_instance.connections.allow_from(
+            fargate_service.service, 
+            ec2.Port.tcp(db_instance.instance_endpoint.port), 
+            "Allow Fargate service to access RDS instance"
+        )
